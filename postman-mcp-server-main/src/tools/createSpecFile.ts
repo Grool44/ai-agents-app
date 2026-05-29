@@ -1,0 +1,52 @@
+import { z } from 'zod';
+import { PostmanAPIClient, ContentType } from '../clients/postman.js';
+import { IsomorphicHeaders, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { ServerContext, asMcpError, McpError } from './utils/toolHelpers.js';
+
+export const method = 'createSpecFile';
+export const description =
+  'Creates an API specification file.\n\n**Note:**\n\n- If the file path contains a \\`/\\` (forward slash) character, then a folder is created. For example, if the path is the \\`components/schemas.json\\` value, then a \\`components\\` folder is created with the \\`schemas.json\\` file inside.\n- Creating a spec file assigns it the \\`DEFAULT\\` file type.\n- Multi-file specifications can only have one root file.\n- Files cannot exceed a maximum of 10 MB in size.\n';
+export const parameters = z.object({
+  specId: z.string().describe("The spec's ID."),
+  path: z.string().describe("The file's path. Accepts JSON or YAML files."),
+  content: z.string().describe("The file's stringified contents."),
+});
+export const annotations = {
+  title: 'Creates an API specification file.',
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+};
+
+export async function handler(
+  args: z.infer<typeof parameters>,
+  extra: { client: PostmanAPIClient; headers?: IsomorphicHeaders; serverContext?: ServerContext }
+): Promise<CallToolResult> {
+  try {
+    const endpoint = `/specs/${args.specId}/files`;
+    const query = new URLSearchParams();
+    const url = query.toString() ? `${endpoint}?${query.toString()}` : endpoint;
+    const bodyPayload: any = {};
+    if (args.path !== undefined) bodyPayload.path = args.path;
+    if (args.content !== undefined) bodyPayload.content = args.content;
+    const options: any = {
+      body: JSON.stringify(bodyPayload),
+      contentType: ContentType.Json,
+      headers: extra.headers,
+    };
+    const result = await extra.client.post(url, options);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `${typeof result === 'string' ? result : JSON.stringify(result, null, 2)}`,
+        },
+      ],
+    };
+  } catch (e: unknown) {
+    if (e instanceof McpError) {
+      throw e;
+    }
+    throw asMcpError(e);
+  }
+}

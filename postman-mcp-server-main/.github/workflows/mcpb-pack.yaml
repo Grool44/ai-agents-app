@@ -1,0 +1,131 @@
+name: Release MCPB
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve release tag
+        id: release-tag
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            tag=$(gh release view --json tagName -q .tagName)
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync manifest versions with package.json
+        run: |
+          pkg_version=$(jq -r .version package.json)
+          jq --arg v "$pkg_version" '.version = $v' manifest-minimal.json > manifest-minimal.tmp.json
+          mv manifest-minimal.tmp.json manifest-minimal.json
+          jq --arg v "$pkg_version" '.version = $v' manifest-full.json > manifest-full.tmp.json
+          mv manifest-full.tmp.json manifest-full.json
+          jq --arg v "$pkg_version" '.version = $v' manifest-code.json > manifest-code.tmp.json
+          mv manifest-code.tmp.json manifest-code.json
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Install dependencies for packaging
+        run: |
+          rm -rf node_modules
+          pnpm install --frozen-lockfile --prod
+
+      - name: Install MCPB
+        run: npm install -g @anthropic-ai/mcpb
+
+      - name: Package extensions
+        run: |
+          current_dir=$(basename "$PWD")
+
+          # Package minimal version
+          cp manifest-minimal.json manifest.json
+          mcpb pack
+          mv "${current_dir}.mcpb" "${current_dir}-minimal.mcpb"
+
+          # Package full version
+          cp manifest-full.json manifest.json
+          mcpb pack
+          mv "${current_dir}.mcpb" "${current_dir}-full.mcpb"
+
+          # Package code version
+          cp manifest-code.json manifest.json
+          mcpb pack
+          mv "${current_dir}.mcpb" "${current_dir}-code.mcpb"
+
+          # Set environment variables
+          echo "MCPB_MINIMAL_FILENAME=${current_dir}-minimal.mcpb" >> $GITHUB_ENV
+          echo "MCPB_FULL_FILENAME=${current_dir}-full.mcpb" >> $GITHUB_ENV
+          echo "MCPB_CODE_FILENAME=${current_dir}-code.mcpb" >> $GITHUB_ENV
+
+      - name: Upload minimal release asset
+        uses: svenstaro/upload-release-action@7027b7670c56b9473901daad1fb8a09ab534688e
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.MCPB_MINIMAL_FILENAME }}
+          asset_name: ${{ env.MCPB_MINIMAL_FILENAME }}
+          tag: ${{ steps.release-tag.outputs.tag }}
+          overwrite: true
+
+      - name: Upload full release asset
+        uses: svenstaro/upload-release-action@7027b7670c56b9473901daad1fb8a09ab534688e
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.MCPB_FULL_FILENAME }}
+          asset_name: ${{ env.MCPB_FULL_FILENAME }}
+          tag: ${{ steps.release-tag.outputs.tag }}
+          overwrite: true
+
+      - name: Upload code release asset
+        uses: svenstaro/upload-release-action@7027b7670c56b9473901daad1fb8a09ab534688e
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.MCPB_CODE_FILENAME }}
+          asset_name: ${{ env.MCPB_CODE_FILENAME }}
+          tag: ${{ steps.release-tag.outputs.tag }}
+          overwrite: true
+
+  publish-mcp:
+    if: github.event_name != 'workflow_dispatch'
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install MCP Publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
+          chmod +x mcp-publisher
+
+      - name: Login to MCP Registry
+        run: |
+          echo "${{ secrets.MCP_PRIVATE_KEY }}" > key.pem
+          ./mcp-publisher login dns --domain postman.com --private-key $(openssl pkey -in key.pem -noout -text | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n')
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

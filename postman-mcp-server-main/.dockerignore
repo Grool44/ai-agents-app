@@ -1,0 +1,15 @@
+# Docker specific
+# ---------------
+.git
+
+# OSX
+# ---
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+node_modules
+package-lock.json
+dist
+.github

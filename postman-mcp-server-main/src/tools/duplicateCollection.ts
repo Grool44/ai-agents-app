@@ -1,0 +1,55 @@
+import { z } from 'zod';
+import { PostmanAPIClient, ContentType } from '../clients/postman.js';
+import { IsomorphicHeaders, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { ServerContext, asMcpError, McpError } from './utils/toolHelpers.js';
+
+export const method = 'duplicateCollection';
+export const description =
+  "Creates a duplicate of the given collection in another workspace.\n\nUse the GET \\`/collection-duplicate-tasks/{taskId}\\` endpoint to get the duplication task's current status.\n";
+export const parameters = z.object({
+  collectionId: z.string().describe("The collection's unique ID."),
+  workspace: z.string().describe('The workspace ID in which to duplicate the collection.'),
+  suffix: z
+    .string()
+    .describe("An optional suffix to append to the duplicated collection's name.")
+    .optional(),
+});
+export const annotations = {
+  title: 'Creates a duplicate of the given collection in another workspace.',
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+};
+
+export async function handler(
+  args: z.infer<typeof parameters>,
+  extra: { client: PostmanAPIClient; headers?: IsomorphicHeaders; serverContext?: ServerContext }
+): Promise<CallToolResult> {
+  try {
+    const endpoint = `/collections/${args.collectionId}/duplicates`;
+    const query = new URLSearchParams();
+    const url = query.toString() ? `${endpoint}?${query.toString()}` : endpoint;
+    const bodyPayload: any = {};
+    if (args.workspace !== undefined) bodyPayload.workspace = args.workspace;
+    if (args.suffix !== undefined) bodyPayload.suffix = args.suffix;
+    const options: any = {
+      body: JSON.stringify(bodyPayload),
+      contentType: ContentType.Json,
+      headers: extra.headers,
+    };
+    const result = await extra.client.post(url, options);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `${typeof result === 'string' ? result : JSON.stringify(result, null, 2)}`,
+        },
+      ],
+    };
+  } catch (e: unknown) {
+    if (e instanceof McpError) {
+      throw e;
+    }
+    throw asMcpError(e);
+  }
+}

@@ -1,0 +1,83 @@
+[
+  {
+    "id": 1779869609683,
+    "user_id": 1,
+    "name": "Test Agent",
+    "agent_type": "coder",
+    "description": "Test",
+    "is_active": true,
+    "messages": [],
+    "tg_chat_id": "@test",
+    "tg_phone": "+79991234567"
+  },
+  {
+    "id": 1779891222777,
+    "user_id": 1779869153006,
+    "name": "Ген Директор",
+    "agent_type": "ceo",
+    "is_active": true,
+    "description": "Главный агент, управляет командой"
+  },
+  {
+    "id": 1779891222778,
+    "user_id": 1779869153006,
+    "name": "VK Support",
+    "agent_type": "vk_bot",
+    "is_active": true,
+    "description": "Бот для ВКонтакте"
+  },
+  {
+    "id": 1779891222779,
+    "user_id": 1779869153006,
+    "name": "TG Sales",
+    "agent_type": "tg_bot",
+    "is_active": true,
+    "description": "Telegram бот для продаж",
+    "tg_token": "8816269392:AAGJU9i_XwgtAg56HvC07djenoSX3KavHc0",
+    "tg_chat_id": "@GROOL09",
+    "tg_phone": "+79591867652",
+    "tg_bot_token": "8816269392:AAGJU9i_XwgtAg56HvC07djenoSX3KavHc0"
+  },
+  {
+    "id": 1779893934914,
+    "user_id": 1779869153006,
+    "name": "1",
+    "agent_type": "ceo",
+    "description": "",
+    "is_active": true,
+    "created_at": "2026-05-27T17:58:54.914698"
+  },
+  {
+    "id": 1779902391092,
+    "user_id": 1779902390949,
+    "name": "Ген Директор",
+    "agent_type": "ceo",
+    "is_active": true,
+    "description": "Главный агент, управляет командой"
+  },
+  {
+    "id": 1779902391093,
+    "user_id": 1779902390949,
+    "name": "VK Support",
+    "agent_type": "vk_bot",
+    "is_active": true,
+    "description": "Бот для ВКонтакте"
+  },
+  {
+    "id": 1779902391094,
+    "user_id": 1779902390949,
+    "name": "TG Sales",
+    "agent_type": "tg_bot",
+    "is_active": true,
+    "description": "Telegram бот для продаж"
+  },
+  {
+    "id": 1779987801165,
+    "user_id": 1,
+    "name": "TestTG",
+    "agent_type": "tg_bot",
+    "description": "Test",
+    "is_active": true,
+    "created_at": "2026-05-28T20:03:21.165585"
+  }
+]

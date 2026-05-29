@@ -1,0 +1,53 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Админ панель - AI Office</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#fff;min-height:100vh}
+.header{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:rgba(10,14,26,0.9);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,0.08);height:50px}
+.header h1{font-size:17px}
+.header-right{display:flex;gap:10px}
+.btn{padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;color:#fff;text-decoration:none;display:inline-flex;align-items:center;transition:all .2s}
+.btn:hover{transform:translateY(-1px)}
+.btn-secondary{background:#334155}
+.btn-danger{background:#ef4444}
+.container{padding:80px 20px 40px;max-width:900px;margin:0 auto}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:30px}
+.stat-card{background:#0f172a;border:1px solid #1e3a5f;border-radius:16px;padding:24px;text-align:center;transition:all .2s}
+.stat-card:hover{transform:translateY(-4px);border-color:#3b82f6}
+.stat-number{font-size:32px;font-weight:700;margin-bottom:4px}
+.stat-label{color:#94a3b8;font-size:12px}
+.stat-card.ai-on .stat-number{color:#10b981}
+.stat-card.ai-off .stat-number{color:#ef4444}
+.glow{position:fixed;width:400px;height:400px;background:#3b82f6;border-radius:50%;filter:blur(150px);opacity:.08;pointer-events:none;top:10%;left:50%;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="header">
+<h1>🏢 AI Office — Админ панель</h1>
+<div class="header-right">
+<a href="/dashboard.html" class="btn btn-secondary">← В офис</a>
+<button onclick="logout()" class="btn btn-danger">Выйти</button>
+</div>
+</div>
+<div class="container">
+<div class="stats-grid" id="statsGrid">
+<div class="stat-card"><div class="stat-number" id="sUsers">-</div><div class="stat-label">Пользователей</div></div>
+<div class="stat-card"><div class="stat-number" id="sAgents">-</div><div class="stat-label">Сотрудников</div></div>
+<div class="stat-card"><div class="stat-number" id="sVisits">-</div><div class="stat-label">Визитов</div></div>
+<div class="stat-card"><div class="stat-number" id="sToday">-</div><div class="stat-label">Сегодня</div></div>
+<div class="stat-card" id="sAICard"><div class="stat-number" id="sAI">-</div><div class="stat-label">ИИ статус</div></div>
+</div>
+</div>
+<script>
+const API_BASE="http://localhost:8000/api/v1";
+async function init(){try{const r=await fetch(API_BASE+"/admin/stats");const d=await r.json();document.getElementById("sUsers").textContent=d.total_users||0;document.getElementById("sAgents").textContent=d.total_agents||0;document.getElementById("sVisits").textContent=d.total_visits||0;document.getElementById("sToday").textContent=d.today_visits||0;document.getElementById("sAI").textContent=d.ai_enabled?"ON":"OFF";document.getElementById("sAICard").className="stat-card "+(d.ai_enabled?"ai-on":"ai-off");}catch(e){document.getElementById("statsGrid").innerHTML="<div style='color:#ef4444;padding:40px;grid-column:1/-1'>Ошибка загрузки</div>";}}
+function logout(){localStorage.removeItem("currentUser");window.location.href="/login.html";}
+document.addEventListener("DOMContentLoaded",init);
+</script>
+</body>
+</html>

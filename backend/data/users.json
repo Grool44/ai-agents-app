@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1779869153006,
+    "name": "Егор",
+    "email": "egoroneshko10@gmail.com",
+    "password": "0b4ac8903c921d75733923ecf1e9e20a2f492e5de01530ea348f31a967dd6f3e",
+    "reg_date": "2026-05-27T11:05:53.006093",
+    "visit_count": 17
+  },
+  {
+    "id": 1779902390949,
+    "name": "Егор",
+    "email": "egoroneshko10@mail.ru",
+    "password": "0b4ac8903c921d75733923ecf1e9e20a2f492e5de01530ea348f31a967dd6f3e",
+    "reg_date": "2026-05-27T20:19:50.949336",
+    "visit_count": 0
+  },
+  {
+    "id": 1779978580510,
+    "name": "Test",
+    "email": "t1@example.com",
+    "password": "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5",
+    "reg_date": "2026-05-28T17:29:40.510610",
+    "visit_count": 1
+  }
+]

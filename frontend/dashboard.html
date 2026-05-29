@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D AI Office</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <div class="header">
+    <h1>🏢 3D AI Office</h1>
+    <div class="header-right">
+      <span id="aiStatusBadge" class="ai-badge off">ИИ: выкл</span>
+      <div class="user-info">👤 <span id="userDisplayName">User</span></div>
+      <select id="officeSelect" class="btn btn-secondary" style="width:auto;padding:6px 12px">
+        <option value="office1">Офис 1</option>
+        <option value="office2">Офис 2</option>
+        <option value="office3">Офис 3</option>
+      </select>
+      <button id="btnCreateAgent" class="btn btn-success">+ Нанять</button>
+      <a href="/profile.html" class="btn btn-secondary">Профиль</a>
+      <button id="btnLogout" class="btn btn-danger">Выйти</button>
+    </div>
+  </div>
+
+  <canvas id="threeCanvas" style="position:fixed;top:50px;left:0;width:100%;height:calc(100% - 50px);display:block;z-index:1;"></canvas>
+
+  <div class="tasks-panel">
+    <h3>📋 Задачи офиса</h3>
+    <div class="tasks-grid" id="tasksGrid"></div>
+  </div>
+
+  <div id="chatOverlay" class="chat-overlay">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="chat-avatar" id="chatAvatar">🤖</div>
+        <div>
+          <div class="chat-title" id="chatTitle">Сотрудник</div>
+          <div class="chat-subtitle" id="chatSubtitle">Должность</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" id="btnSocialSettings" title="Настройки соцсетей">⚙️</button>
+        <button class="btn btn-secondary" id="btnCloseChat">✕ Закрыть</button>
+      </div>
+    </div>
+
+    <!-- Настройки токенов (скрыты по умолчанию) -->
+    <div id="socialSettingsPanel" style="display:none;padding:12px;background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(255,255,255,0.1)">
+      <div id="tgSettings" style="display:none;margin-bottom:10px">
+        <div style="font-size:12px;color:#3b82f6;margin-bottom:6px;font-weight:bold">🔵 Telegram</div>
+        
+        <!-- Переключатель режима -->
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button type="button" id="tgModeBot" class="btn btn-primary" style="flex:1;font-size:11px;padding:6px" onclick="setTgMode('bot')">🤖 Бот API</button>
+          <button type="button" id="tgModeUser" class="btn btn-secondary" style="flex:1;font-size:11px;padding:6px" onclick="setTgMode('user')">👤 Аккаунт (MTProto)</button>
+        </div>
+        
+        <!-- Bot API режим -->
+        <div id="tgBotApiPanel">
+          <input type="text" id="tgBotTokenInput" placeholder="Bot Token от @BotFather" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-size:12px">
+          <div style="font-size:10px;color:#64748b;margin-bottom:4px">Получите токен у @BotFather в Telegram</div>
+          <input type="text" id="tgChatInput" placeholder="Chat ID или @username (получателя)" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-size:12px">
+          <div style="font-size:10px;color:#64748b;margin-bottom:4px">Напишите боту любое сообщение, затем откройте: https://api.telegram.org/botВАШ_ТОКЕН/getUpdates и найдите chat.id</div>
+          <button class="btn btn-success" id="btnSaveTgBot" style="width:100%;font-size:11px;padding:6px">💾 Сохранить бота</button>
+        </div>
+        
+        <!-- MTProto режим -->
+        <div id="tgMtprotoPanel" style="display:none">
+          <input type="text" id="tgPhoneInput" placeholder="Номер телефона (+79991234567)" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-size:12px">
+          <button class="btn btn-secondary" id="btnSendCode" style="width:100%;margin-bottom:6px;font-size:11px;padding:6px">📱 Отправить код</button>
+          <input type="text" id="tgCodeInput" placeholder="Код из SMS" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-size:12px;display:none">
+          <button class="btn btn-primary" id="btnVerifyCode" style="width:100%;margin-bottom:6px;font-size:11px;padding:6px;display:none">✅ Подтвердить</button>
+          <input type="text" id="tgMtprotoChatInput" placeholder="Chat ID или @username или номер" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-size:12px">
+          <div style="font-size:10px;color:#64748b;margin-bottom:4px">Для публикации в канал: @channelname</div>
+          <button class="btn btn-success" id="btnSaveTg" style="width:100%;font-size:11px;padding:6px">💾 Сохранить и начать</button>
+        </div>
+        
+        <div id="tgStatus" style="font-size:10px;color:#10b981;margin-top:4px"></div>
+      </div>
+      <div id="vkSettings" style="display:none">
+        <div style="font-size:12px;color:#3b82f6;margin-bottom:6px;font-weight:bold">🔷 VK настройки</div>
+        <input type="text" id="vkTokenInput" placeholder="VK access token (группы)" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-size:12px">
+        <input type="text" id="vkGroupInput" placeholder="ID группы (число)" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-size:12px">
+        <button class="btn btn-primary" id="btnSaveVk" style="width:100%;font-size:11px;padding:6px">💾 Сохранить VK</button>
+      </div>
+      <div id="socialStatus" style="font-size:11px;color:#64748b;margin-top:4px"></div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-bar">
+      <button id="btnVoice" class="voice-btn" title="Голосовой ввод">🎤</button>
+      <input type="text" id="messageInput" placeholder="Напишите сообщение...">
+      <button id="btnSend" class="btn btn-primary">Отправить</button>
+    </div>
+  </div>
+
+  <div id="createModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header"><h2>Нанять сотрудника</h2><button class="modal-close" id="btnCloseModal">&times;</button></div>
+      <div class="modal-body">
+        <form id="createAgentForm">
+          <div class="form-group"><label>Имя</label><input type="text" id="agentName" required placeholder="Иван Петров"></div>
+          <div class="form-group"><label>Должность</label><select id="agentType" required>
+            <option value="custom">✨ Кастомная</option>
+            <option value="ceo">👔 Ген. директор</option>
+            <option value="vk_bot">🔵 VK Менеджер</option>
+            <option value="tg_bot">🔷 TG Менеджер</option>
+            <option value="coder">💻 Программист</option>
+            <option value="researcher">🔍 Исследователь</option>
+            <option value="analyst">📊 Аналитик</option>
+            <option value="poster">📝 Контент-мейкер</option>
+          </select></div>
+          <div class="form-group custom-role-box" id="customRoleBox"><label>Обязанности</label><textarea id="agentRole" rows="3" placeholder="Опишите что делает сотрудник..."></textarea></div>
+          <div class="form-group"><label>Описание</label><input type="text" id="agentDescription" placeholder="Краткое описание"></div>
+          <div style="display:flex;gap:10px"><button type="submit" class="btn btn-success" style="flex:1">Нанять</button><button type="button" class="btn btn-secondary" id="btnCancelModal" style="flex:1">Отмена</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+<script>
+const API_BASE = "http://localhost:8000/api/v1";
+let currentUser = null, agents = [], tasks = [], selectedAgent = null, aiEnabled = false, recognition = null;
+
+const COLORS = { ceo:0xf59e0b, vk_bot:0x3b82f6, tg_bot:0x06b6d4, coder:0x10b981, researcher:0x8b5cf6, analyst:0xec4899, poster:0xf97316, custom:0x64748b };
+const AVATARS = { ceo:"👔", vk_bot:"🔵", tg_bot:"🔷", coder:"💻", researcher:"🔍", analyst:"📊", poster:"📝", custom:"✨" };
+const ROLES = { ceo:"Ген. директор", vk_bot:"VK Менеджер (готов к работе)", tg_bot:"TG Менеджер (готов к работе)", coder:"Программист", researcher:"Исследователь", analyst:"Аналитик", poster:"Контент-мейкер", custom:"Специалист" };
+
+let scene, camera, renderer, controls, raycaster, mouse;
+let agentMeshes = [];
+let currentOffice = "office1";
+
+const OFFICE_LAYOUTS = {
+  office1: [
+    {x:-3, z:-5}, {x:-1, z:-5}, {x:1, z:-5}, {x:3, z:-5},
+    {x:-2, z:-7}, {x:0, z:-7}, {x:2, z:-7}, {x:4, z:-7},
+    {x:-3, z:-9}, {x:-1, z:-9}, {x:1, z:-9}, {x:3, z:-9},
+    {x:-2, z:-11}, {x:0, z:-11}, {x:2, z:-11}, {x:4, z:-11},
+  ],
+  office2: [
+    {x:-4, z:-4}, {x:-2, z:-4}, {x:0, z:-4}, {x:2, z:-4}, {x:4, z:-4},
+    {x:-3, z:-6}, {x:-1, z:-6}, {x:1, z:-6}, {x:3, z:-6},
+    {x:-4, z:-8}, {x:-2, z:-8}, {x:0, z:-8}, {x:2, z:-8}, {x:4, z:-8},
+    {x:-3, z:-10}, {x:-1, z:-10}, {x:1, z:-10}, {x:3, z:-10},
+  ],
+  office3: [
+    {x:-2.5, z:-3}, {x:-0.5, z:-3}, {x:1.5, z:-3}, {x:3.5, z:-3},
+    {x:-3, z:-5}, {x:-1, z:-5}, {x:1, z:-5}, {x:3, z:-5},
+    {x:-2.5, z:-7}, {x:-0.5, z:-7}, {x:1.5, z:-7}, {x:3.5, z:-7},
+    {x:-3, z:-9}, {x:-1, z:-9}, {x:1, z:-9}, {x:3, z:-9},
+  ],
+};
+
+function showToast(msg, isError) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "toast" + (isError ? " error" : "");
+  t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 3000);
+}
+function getUser() { try { const u = localStorage.getItem("currentUser"); return u ? JSON.parse(u) : null; } catch(e) { return null; } }
+
+function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { document.getElementById("btnVoice").style.display = "none"; return; }
+  recognition = new SR(); recognition.lang = "ru-RU"; recognition.continuous = false; recognition.interimResults = false;
+  recognition.onstart = () => { document.getElementById("btnVoice").classList.add("recording"); showToast("🎤 Говорите..."); };
+  recognition.onend = () => document.getElementById("btnVoice").classList.remove("recording");
+  recognition.onresult = (e) => { const text = e.results[0][0].transcript; document.getElementById("messageInput").value = text; sendMessage(text); };
+  recognition.onerror = (e) => showToast("Ошибка микрофона: " + e.error, true);
+}
+
+function initThree() {
+  const canvas = document.getElementById("threeCanvas");
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0e1a);
+  scene.fog = new THREE.Fog(0x0a0e1a, 20, 50);
+
+  camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+  camera.position.set(0, 1.65, 0);
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.minPolarAngle = Math.PI / 2.3;
+  controls.maxPolarAngle = Math.PI / 2.05;
+  controls.minDistance = 2;
+  controls.maxDistance = 12;
+  controls.target.set(0, 1.2, -6);
+  controls.enablePan = false;
+
+  const ambient = new THREE.AmbientLight(0x404060, 0.6);
+  scene.add(ambient);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+  dirLight.position.set(5, 10, 5);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  scene.add(dirLight);
+
+  const floorGeo = new THREE.PlaneGeometry(30, 30);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a2744, roughness: 0.9 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const grid = new THREE.GridHelper(30, 30, 0x2a5a8a, 0x1a3a5f);
+  grid.position.y = 0.01;
+  scene.add(grid);
+
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x0d1f33, roughness: 0.95 });
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(30, 5, 0.3), wallMat);
+  backWall.position.set(0, 2.5, -15);
+  backWall.receiveShadow = true;
+  scene.add(backWall);
+
+  const winMat = new THREE.MeshBasicMaterial({ color: 0x87ceeb });
+  [-8, -4, 0, 4, 8].forEach(x => {
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.2), winMat);
+    win.position.set(x, 3, -14.8);
+    scene.add(win);
+  });
+
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  canvas.addEventListener("click", onCanvasClick);
+  window.addEventListener("resize", onResize);
+  animate();
+}
+
+function createHumanoid(x, z, color) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+
+  const legGeo = new THREE.BoxGeometry(0.12, 0.5, 0.12);
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x1e3a5f });
+  const leftLeg = new THREE.Mesh(legGeo, legMat);
+  leftLeg.position.set(-0.08, 0.25, 0);
+  leftLeg.castShadow = true;
+  group.add(leftLeg);
+  const rightLeg = new THREE.Mesh(legGeo, legMat);
+  rightLeg.position.set(0.08, 0.25, 0);
+  rightLeg.castShadow = true;
+  group.add(rightLeg);
+
+  const bodyGeo = new THREE.BoxGeometry(0.35, 0.55, 0.18);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: color });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.set(0, 0.78, 0);
+  body.castShadow = true;
+  group.add(body);
+
+  const headGeo = new THREE.SphereGeometry(0.13, 16, 16);
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xf5d0a9 });
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.set(0, 1.22, 0);
+  head.castShadow = true;
+  group.add(head);
+
+  const armGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.45, 8);
+  const armMat = new THREE.MeshStandardMaterial({ color: 0xf5d0a9 });
+  const leftArm = new THREE.Mesh(armGeo, armMat);
+  leftArm.position.set(-0.22, 0.78, 0);
+  leftArm.rotation.z = 0.2;
+  leftArm.castShadow = true;
+  group.add(leftArm);
+  const rightArm = new THREE.Mesh(armGeo, armMat);
+  rightArm.position.set(0.22, 0.78, 0);
+  rightArm.rotation.z = -0.2;
+  rightArm.castShadow = true;
+  group.add(rightArm);
+
+  const canvas2 = document.createElement("canvas");
+  canvas2.width = 256; canvas2.height = 64;
+  const ctx = canvas2.getContext("2d");
+  ctx.fillStyle = "rgba(0,0,0,0.8)";
+  ctx.roundRect(0, 0, 256, 64, 16);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 22px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Имя", 128, 32);
+  const tex = new THREE.CanvasTexture(canvas2);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+  sprite.position.set(0, 1.6, 0);
+  sprite.scale.set(0.85, 0.22, 1);
+  group.add(sprite);
+
+  group.userData = { head, body, leftArm, rightArm, leftLeg, rightLeg, breathing: true, typing: false };
+  return group;
+}
+
+function createDesk(x, z) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.05, 0.5),
+    new THREE.MeshStandardMaterial({ color: 0x6b4423 })
+  );
+  top.position.y = 0.75;
+  top.castShadow = true;
+  group.add(top);
+
+  const legGeo = new THREE.BoxGeometry(0.04, 0.75, 0.04);
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+  [[-0.35, -0.2], [0.35, -0.2], [-0.35, 0.2], [0.35, 0.2]].forEach(p => {
+    const leg = new THREE.Mesh(legGeo, legMat);
+    leg.position.set(p[0], 0.375, p[1]);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  const mon = new THREE.Mesh(
+    new THREE.BoxGeometry(0.35, 0.25, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x111111 })
+  );
+  mon.position.set(0, 0.92, -0.2);
+  group.add(mon);
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.3, 0.2),
+    new THREE.MeshBasicMaterial({ color: 0x10b981 })
+  );
+  screen.position.set(0, 0.92, -0.18);
+  group.add(screen);
+
+  const chairSeat = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.04, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a2a })
+  );
+  chairSeat.position.set(0, 0.5, 0.35);
+  group.add(chairSeat);
+
+  return group;
+}
+
+function animateHumans(time) {
+  agentMeshes.forEach(item => {
+    const h = item.humanoid.userData;
+    if (h.breathing) {
+      const breath = Math.sin(time * 2.5) * 0.015;
+      h.body.scale.y = 1 + breath;
+      h.body.position.y = 0.78 + breath * 0.3;
+      h.head.position.y = 1.22 + breath * 0.3;
+      h.leftLeg.position.y = 0.25 + Math.sin(time * 2) * 0.005;
+      h.rightLeg.position.y = 0.25 + Math.sin(time * 2 + 1) * 0.005;
+    }
+    if (h.typing) {
+      h.leftArm.rotation.x = Math.sin(time * 12) * 0.15;
+      h.rightArm.rotation.x = -Math.sin(time * 12 + 0.5) * 0.15;
+    }
+  });
+}
+
+function onCanvasClick(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(scene.children, true);
+  for (let i = 0; i < intersects.length; i++) {
+    let obj = intersects[i].object;
+    while (obj.parent && obj.parent !== scene) {
+      if (obj.parent.userData && obj.parent.userData.agentId !== undefined) {
+        const a = agents.find(x => x.id === obj.parent.userData.agentId);
+        if (a) { openChat(a); return; }
+      }
+      obj = obj.parent;
+    }
+  }
+}
+
+function onResize() {
+  const canvas = document.getElementById("threeCanvas");
+  camera.aspect = canvas.clientWidth / canvas.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const time = performance.now() * 0.001;
+  animateHumans(time);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function renderOffice() {
+  agentMeshes.forEach(item => {
+    scene.remove(item.humanoid);
+    scene.remove(item.desk);
+  });
+  agentMeshes = [];
+  if (!agents.length) return;
+
+  const layout = OFFICE_LAYOUTS[currentOffice] || OFFICE_LAYOUTS.office1;
+
+  agents.forEach((a, i) => {
+    const pos = layout[i % layout.length];
+    const color = COLORS[a.agent_type] || 0x64748b;
+
+    const desk = createDesk(pos.x, pos.z);
+    scene.add(desk);
+
+    const human = createHumanoid(pos.x, pos.z + 0.6, color);
+    human.userData.agentId = a.id;
+    scene.add(human);
+
+    const sprite = human.children.find(c => c.isSprite);
+    if (sprite) {
+      const canvas2 = document.createElement("canvas");
+      canvas2.width = 256; canvas2.height = 64;
+      const ctx = canvas2.getContext("2d");
+      ctx.fillStyle = "rgba(0,0,0,0.8)";
+      ctx.roundRect(0, 0, 256, 64, 16);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(a.name, 128, 32);
+      sprite.material.map = new THREE.CanvasTexture(canvas2);
+      sprite.material.needsUpdate = true;
+    }
+
+    agentMeshes.push({ humanoid: human, desk, agent: a });
+  });
+}
+
+async function init() {
+  currentUser = getUser();
+  if (!currentUser || !currentUser.id) { window.location.href = "/login.html"; return; }
+  document.getElementById("userDisplayName").textContent = currentUser.name || "User";
+  initVoice(); initThree(); await checkAI(); await loadAgents(); await loadTasks();
+  renderOffice(); renderTasks();
+
+  document.getElementById("officeSelect").addEventListener("change", function() {
+    currentOffice = this.value;
+    renderOffice();
+    showToast("Офис изменён");
+  });
+}
+
+async function checkAI() {
+  try { const r = await fetch(API_BASE + "/ai/status"); const d = await r.json(); aiEnabled = d.enabled;
+    const b = document.getElementById("aiStatusBadge"); if (aiEnabled) { b.textContent = "ИИ: вкл"; b.className = "ai-badge on"; }
+  } catch(e) {}
+}
+async function loadAgents() { try { const r = await fetch(API_BASE + "/agents/" + currentUser.id); agents = await r.json(); } catch(e) { agents = []; } }
+async function loadTasks() { try { const r = await fetch(API_BASE + "/tasks/" + currentUser.id); tasks = await r.json(); } catch(e) { tasks = []; } }
+
+function openChat(agent) {
+  selectedAgent = agent;
+  document.getElementById("chatTitle").textContent = agent.name;
+  document.getElementById("chatSubtitle").textContent = ROLES[agent.agent_type] || agent.agent_type;
+  document.getElementById("chatAvatar").textContent = AVATARS[agent.agent_type] || "🤖";
+  document.getElementById("chatOverlay").classList.add("active");
+  document.getElementById("socialSettingsPanel").style.display = "none";
+  loadMessages(agent.id);
+  loadSocialStatus();
+
+  agentMeshes.forEach(item => {
+    if (item.agent.id === agent.id) {
+      item.humanoid.userData.typing = true;
+      setTimeout(() => { if(item.humanoid) item.humanoid.userData.typing = false; }, 2000);
+    }
+  });
+}
+function closeChat() { document.getElementById("chatOverlay").classList.remove("active"); document.getElementById("socialSettingsPanel").style.display = "none"; selectedAgent = null; }
+
+async function loadMessages(agentId) {
+  try { const r = await fetch(API_BASE + "/messages/" + agentId + "/" + currentUser.id); const msgs = await r.json(); renderMessages(msgs); }
+  catch(e) { document.getElementById("chatMessages").innerHTML = "<div style='text-align:center;padding:40px;color:#64748b'>Начните диалог!</div>"; }
+}
+function renderMessages(msgs) {
+  const c = document.getElementById("chatMessages");
+  if (!msgs || !msgs.length) { c.innerHTML = "<div style='text-align:center;padding:40px;color:#64748b'>Начните диалог с сотрудником!</div>"; return; }
+  let html = "";
+  msgs.forEach(m => { const time = new Date(m.timestamp).toLocaleTimeString("ru-RU", {hour:"2-digit",minute:"2-digit"}); html += "<div class='message " + m.sender + "'><div>" + m.text.replace(/\n/g,"<br>") + "</div><div class='message-time'>" + time + "</div></div>"; });
+  c.innerHTML = html; c.scrollTop = c.scrollHeight;
+}
+async function sendMessage(text) {
+  if (!text || !selectedAgent) return;
+  const c = document.getElementById("chatMessages");
+  const time = new Date().toLocaleTimeString("ru-RU", {hour:"2-digit",minute:"2-digit"});
+
+  // Команды для соцсетей: tg: текст или vk: текст
+  const lower = text.toLowerCase();
+  if (lower.startsWith("tg:") || lower.startsWith("telegram:")) {
+    const msgText = text.substring(text.indexOf(":") + 1).trim();
+    await sendToSocial_mtproto("tg", msgText);
+    return;
+  }
+  if (lower.startsWith("vk:") || lower.startsWith("вк:")) {
+    const msgText = text.substring(text.indexOf(":") + 1).trim();
+    await sendToSocial_vk("vk", msgText);
+    return;
+  }
+
+  c.innerHTML += "<div class='message user'><div>" + text.replace(/\n/g,"<br>") + "</div><div class='message-time'>" + time + "</div></div>";
+  c.scrollTop = c.scrollHeight; document.getElementById("messageInput").value = "";
+  try {
+    const r = await fetch(API_BASE + "/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({agent_id:selectedAgent.id,user_id:currentUser.id,text:text,sender:"user"})
+    });
+    const d = await r.json();
+    if (d.response) await loadMessages(selectedAgent.id);
+  } catch(e) { showToast("Ошибка отправки", true); }
+}
+
+// === TG MODE SWITCHER ===
+let currentTgMode = "bot"; // "bot" | "user"
+
+function setTgMode(mode) {
+  currentTgMode = mode;
+  document.getElementById("tgBotApiPanel").style.display = mode === "bot" ? "block" : "none";
+  document.getElementById("tgMtprotoPanel").style.display = mode === "user" ? "block" : "none";
+  document.getElementById("tgModeBot").className = mode === "bot" ? "btn btn-primary" : "btn btn-secondary";
+  document.getElementById("tgModeUser").className = mode === "user" ? "btn btn-primary" : "btn btn-secondary";
+}
+
+async function saveTgBotSettings() {
+  if (!selectedAgent) return;
+  const botToken = document.getElementById("tgBotTokenInput").value.trim();
+  const chatId = document.getElementById("tgChatInput").value.trim();
+  if (!botToken) { showToast("Введите Bot Token от @BotFather", true); return; }
+  try {
+    const r = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/social?user_id=" + currentUser.id, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({tg_bot_token: botToken, tg_chat_id: chatId})
+    });
+    if (r.ok) {
+      showToast("✅ Bot Token сохранён");
+      selectedAgent.tg_bot_token = botToken;
+      selectedAgent.tg_chat_id = chatId;
+      loadSocialStatus();
+    } else showToast("Ошибка сохранения", true);
+  } catch(e) { showToast("Ошибка сети", true); }
+}
+
+// === SOCIAL MEDIA FUNCTIONS ===
+function toggleSocialSettings() {
+  const panel = document.getElementById("socialSettingsPanel");
+  const isVisible = panel.style.display === "block";
+  panel.style.display = isVisible ? "none" : "block";
+  if (!isVisible && selectedAgent) {
+    loadSocialStatus();
+    const isTg = selectedAgent.agent_type === "tg_bot";
+    const isVk = selectedAgent.agent_type === "vk_bot";
+    document.getElementById("tgSettings").style.display = isTg ? "block" : "none";
+    document.getElementById("vkSettings").style.display = isVk ? "block" : "none";
+    // Заполняем значения
+    if (selectedAgent.tg_bot_token) document.getElementById("tgBotTokenInput").value = selectedAgent.tg_bot_token;
+    if (selectedAgent.tg_chat_id) document.getElementById("tgChatInput").value = selectedAgent.tg_chat_id;
+    if (selectedAgent.tg_phone) document.getElementById("tgPhoneInput").value = selectedAgent.tg_phone;
+    if (selectedAgent.tg_chat_id && !selectedAgent.tg_bot_token) document.getElementById("tgMtprotoChatInput").value = selectedAgent.tg_chat_id;
+    if (selectedAgent.vk_token) document.getElementById("vkTokenInput").value = selectedAgent.vk_token;
+    if (selectedAgent.vk_group_id) document.getElementById("vkGroupInput").value = selectedAgent.vk_group_id;
+    // Выбираем режим по умолчанию
+    setTgMode(selectedAgent.tg_bot_token ? "bot" : "user");
+  }
+}
+
+async function loadSocialStatus() {
+  if (!selectedAgent) return;
+  const statusEl = document.getElementById("tgStatus");
+  try {
+    // Проверяем Bot API
+    const r1 = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/tg/bot/status?user_id=" + currentUser.id);
+    const d1 = await r1.json();
+    if (d1.ok && d1.connected) {
+      statusEl.textContent = "✅ Бот подключён: @" + (d1.bot_username || "bot");
+      return;
+    }
+  } catch(e) {}
+  try {
+    // Проверяем MTProto
+    const r2 = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/tg/status?user_id=" + currentUser.id);
+    const d2 = await r2.json();
+    if (d2.logged_in) {
+      statusEl.textContent = "✅ Подключён как пользователь " + (d2.phone || "");
+    } else {
+      statusEl.textContent = "⚠️ Не подключён. Выберите режим и настройте";
+    }
+  } catch(e) {
+    statusEl.textContent = "";
+  }
+}
+
+async function saveTgSettings() {
+  if (!selectedAgent) return;
+  const phone = document.getElementById("tgPhoneInput").value.trim();
+  const chatId = document.getElementById("tgMtprotoChatInput").value.trim();
+  if (!phone) { showToast("Введите номер телефона", true); return; }
+  try {
+    const r = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/social?user_id=" + currentUser.id, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({tg_phone: phone, tg_chat_id: chatId})
+    });
+    if (r.ok) {
+      showToast("✅ Номер сохранён. Нажмите 📱 чтобы получить код");
+      selectedAgent.tg_phone = phone;
+      selectedAgent.tg_chat_id = chatId;
+    } else showToast("Ошибка сохранения", true);
+  } catch(e) { showToast("Ошибка сети", true); }
+}
+
+// Отправить код SMS
+async function sendTgCode() {
+  if (!selectedAgent || !selectedAgent.tg_phone) { showToast("Сначала сохраните номер", true); return; }
+  
+  try {
+    const r = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/tg/login?user_id=" + currentUser.id, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({})
+    });
+    
+    const d = await r.json();
+    if (r.ok && d.status === "code_sent") {
+      showToast("📱 Код отправлен на телефон!");
+      document.getElementById("tgCodeInput").style.display = "block";
+      document.getElementById("btnVerifyCode").style.display = "block";
+    } else {
+      showToast(d.message || "Ошибка отправки кода", true);
+    }
+  } catch(e) { showToast("Ошибка сети", true); }
+}
+
+// Подтвердить код
+async function verifyTgCode() {
+  if (!selectedAgent) return;
+  const code = document.getElementById("tgCodeInput").value.trim();
+  if (!code) { showToast("Введите код из SMS", true); return; }
+  
+  try {
+    const r = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/tg/verify?user_id=" + currentUser.id, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({code: code})
+    });
+    
+    const d = await r.json();
+    if (r.ok && d.status === "success") {
+      showToast("✅ Успешно! Теперь вы в Telegram как человек");
+      selectedAgent.tg_logged_in = true;
+      loadSocialStatus();
+      document.getElementById("tgCodeInput").style.display = "none";
+      document.getElementById("btnVerifyCode").style.display = "none";
+    } else {
+      showToast(d.message || "Неверный код", true);
+    }
+  } catch(e) { showToast("Ошибка сети", true); }
+}
+
+
+// Обновлённая функция отправки через TG
+async function sendToSocial_mtproto(platform, text) {
+  if (!selectedAgent) return;
+  const c = document.getElementById("chatMessages");
+  const time = new Date().toLocaleTimeString("ru-RU", {hour:"2-digit",minute:"2-digit"});
+  c.innerHTML += "<div class='message user'><div>📤 " + (platform==="tg"?"Telegram":"VK") + ": " + text.replace(/\n/g,"<br>") + "</div><div class='message-time'>" + time + "</div></div>";
+  c.scrollTop = c.scrollHeight; document.getElementById("messageInput").value = "";
+
+  try {
+    let r;
+    if (platform === "tg") {
+      // Сначала пробуем Bot API (если есть токен)
+      if (selectedAgent.tg_bot_token) {
+        const chatId = selectedAgent.tg_chat_id || "";
+        r = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/tg/bot/send?user_id=" + currentUser.id + "&chat_id=" + encodeURIComponent(chatId) + "&text=" + encodeURIComponent(text), {
+          method: "POST"
+        });
+      } else if (selectedAgent.tg_logged_in) {
+        // Fallback на MTProto
+        const chatId = selectedAgent.tg_chat_id || "";
+        r = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/tg/send?user_id=" + currentUser.id + "&target=" + encodeURIComponent(chatId) + "&text=" + encodeURIComponent(text), {
+          method: "POST"
+        });
+      } else {
+        c.innerHTML += "<div class='message agent'><div>⚠️ TG не настроен. Откройте настройки (⚙️), выберите режим и сохраните токен/номер</div><div class='message-time'>" + time + "</div></div>";
+        c.scrollTop = c.scrollHeight;
+        return;
+      }
+    } else {
+      // VK через Bot API
+      r = await fetch(API_BASE + "/social/send", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({agent_id: selectedAgent.id, user_id: currentUser.id, platform: platform, text: text})
+      });
+    }
+    
+    const d = await r.json();
+    if (r.ok) {
+      c.innerHTML += "<div class='message agent'><div>✅ " + d.message + "</div><div class='message-time'>" + time + "</div></div>";
+      showToast(d.message);
+    } else {
+      c.innerHTML += "<div class='message agent'><div>❌ Ошибка: " + (d.detail || "Неизвестная ошибка") + "</div><div class='message-time'>" + time + "</div></div>";
+      showToast(d.detail || "Ошибка", true);
+    }
+    c.scrollTop = c.scrollHeight;
+  } catch(e) {
+    c.innerHTML += "<div class='message agent'><div>❌ Ошибка сети</div><div class='message-time'>" + time + "</div></div>";
+    c.scrollTop = c.scrollHeight;
+    showToast("Ошибка сети", true);
+  }
+}
+
+async function saveVkSettings() {
+  if (!selectedAgent) return;
+  const token = document.getElementById("vkTokenInput").value.trim();
+  const groupId = document.getElementById("vkGroupInput").value.trim();
+  try {
+    const r = await fetch(API_BASE + "/agents/" + selectedAgent.id + "/social?user_id=" + currentUser.id, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({vk_token: token, vk_group_id: groupId})
+    });
+    if (r.ok) {
+      showToast("✅ VK настройки сохранены");
+      selectedAgent.vk_token = token;
+      selectedAgent.vk_group_id = groupId;
+      loadSocialStatus();
+    } else showToast("Ошибка сохранения", true);
+  } catch(e) { showToast("Ошибка сети", true); }
+}
+
+function renderTasks() {
+  const grid = document.getElementById("tasksGrid");
+  grid.innerHTML = "";
+  if (!tasks || !tasks.length) { grid.innerHTML = "<div style='color:#64748b;min-width:200px'>Нет задач</div>"; return; }
+  tasks.forEach(t => {
+    const card = document.createElement("div"); card.className = "task-card " + t.status;
+    const agent = agents.find(a => a.id === t.agent_id);
+    let html = "<div class='task-title'>" + (t.status==="completed"?"✅ ":"⏳ ") + t.title + "</div><div class='task-desc'>" + t.description + "</div><div class='task-meta'><span>👉 " + (agent?agent.name:"?") + "</span><span>" + (t.status==="completed"?"Готово":"В работе") + "</span></div>";
+    if (t.status === "pending") html += "<button class='btn btn-success' style='margin-top:8px;width:100%;font-size:11px;padding:6px' onclick='executeTask(" + t.id + ")'>▶ Выполнить</button>";
+    else if (t.result) html += "<div class='task-result' style='margin-top:8px;padding:8px;background:rgba(0,0,0,0.3);border-radius:6px;white-space:pre-wrap;max-height:60px;overflow-y:auto'>" + t.result.substring(0,150).replace(/\n/g,"<br>") + (t.result.length>150?"...":"") + "</div>";
+    card.innerHTML = html; grid.appendChild(card);
+  });
+}
+async function executeTask(taskId) {
+  showToast("⏳ Выполняю...");
+  try { const r = await fetch(API_BASE + "/tasks/" + taskId + "/execute", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({user_id:currentUser.id}) }); const d = await r.json(); if (r.ok) { showToast("✅ Готово!"); await loadTasks(); renderTasks(); } else showToast("Ошибка", true); }
+  catch(e) { showToast("Ошибка сети", true); }
+}
+
+async function deleteAgent(id, name) {
+  if (!confirm("Уволить " + name + "?")) return;
+  try { const r = await fetch(API_BASE + "/agents/" + id + "?user_id=" + currentUser.id, { method:"DELETE" }); if (r.ok) { showToast(name + " уволен"); await loadAgents(); await loadTasks(); renderOffice(); renderTasks(); } else showToast("Ошибка", true); }
+  catch(e) { showToast("Ошибка сети", true); }
+}
+
+function openModal() { document.getElementById("createModal").classList.add("active"); }
+function closeModal() { document.getElementById("createModal").classList.remove("active"); document.getElementById("createAgentForm").reset(); document.getElementById("customRoleBox").classList.remove("active"); }
+document.getElementById("agentType").addEventListener("change", function() { const box = document.getElementById("customRoleBox"); if (this.value === "custom") box.classList.add("active"); else box.classList.remove("active"); });
+document.getElementById("createAgentForm").addEventListener("submit", async function(e) {
+  e.preventDefault(); const user = getUser(); if (!user || !user.id) { showToast("Не авторизован", true); return; }
+  const name = document.getElementById("agentName").value, type = document.getElementById("agentType").value, role = document.getElementById("agentRole").value, desc = document.getElementById("agentDescription").value;
+  try { const r = await fetch(API_BASE + "/agents", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({name,agent_type:type,description:type==="custom"?role:desc,user_id:user.id}) }); const d = await r.json(); if (r.ok) { showToast(name + " нанят!"); closeModal(); await loadAgents(); renderOffice(); } else showToast("Ошибка", true); }
+  catch(e) { showToast("Ошибка сети", true); }
+});
+
+document.getElementById("btnCreateAgent").addEventListener("click", openModal);
+document.getElementById("btnCloseModal").addEventListener("click", closeModal);
+document.getElementById("btnCancelModal").addEventListener("click", closeModal);
+document.getElementById("btnLogout").addEventListener("click", function() { localStorage.removeItem("currentUser"); window.location.href = "/login.html"; });
+document.getElementById("btnCloseChat").addEventListener("click", closeChat);
+document.getElementById("btnSend").addEventListener("click", function() { sendMessage(document.getElementById("messageInput").value.trim()); });
+document.getElementById("messageInput").addEventListener("keydown", function(e) { if (e.key === "Enter") sendMessage(this.value.trim()); });
+document.getElementById("btnVoice").addEventListener("click", function() { if (recognition) recognition.start(); });
+document.getElementById("btnSocialSettings").addEventListener("click", toggleSocialSettings);
+document.getElementById("btnSaveTg").addEventListener("click", saveTgSettings);
+document.getElementById("btnSaveTgBot").addEventListener("click", saveTgBotSettings);
+document.getElementById("btnSaveVk").addEventListener("click", saveVkSettings);
+document.getElementById("btnSendCode").addEventListener("click", sendTgCode);
+document.getElementById("btnVerifyCode").addEventListener("click", verifyTgCode);
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
