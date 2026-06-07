@@ -9,14 +9,6 @@ import os
 import hashlib
 import requests
 from dotenv import load_dotenv
-from tg_client import (
-    TelegramUserClient, 
-    get_or_create_client, 
-    start_client_session, 
-    send_telegram_message, 
-    send_to_telegram_channel,
-    active_clients
-)
 
 load_dotenv()
 
@@ -70,17 +62,8 @@ def now_ms() -> int:
 SYSTEM_PROMPTS = {
     "ceo": (
         "Ты — Генеральный директор ИИ-компании. Ты управляешь командой специализированных агентов: "
-        "VK Bot (работа с ВКонтакте), TG Bot (Telegram), Coder (программирование), Researcher (поиск информации), "
-        "Analyst (анализ данных), Poster (публикации). Ты умеешь анализировать задачи и распределять их. "
-        "Отвечай профессионально, по делу, как опытный руководитель."
-    ),
-    "vk_bot": (
-        "Ты — бот для ВКонтакте. Ты умеешь: отвечать клиентам, оформлять посты, работать с сообществами, "
-        "настраивать автоответы. Общайся дружелюбно, используй эмодзи, стиль ВК."
-    ),
-    "tg_bot": (
-        "Ты — Telegram бот для продаж и поддержки. Ты умеешь: консультировать клиентов, оформлять заказы, "
-        "отправлять уведомления, работать с чатами. Общайся чётко и по делу."
+        "Coder (программирование), Researcher (поиск информации), Analyst (анализ данных), Poster (публикации). "
+        "Ты умеешь анализировать задачи и распределять их. Отвечай профессионально, по делу, как опытный руководитель."
     ),
     "coder": (
         "Ты — опытный программист. Ты пишешь код на Python, JavaScript, SQL. Ты умеешь объяснять сложное простым языком, "
@@ -135,6 +118,49 @@ def call_real_ai(messages: List[Dict[str, str]], model: str = None) -> Optional[
     except Exception as e:
         print(f"AI call error: {e}")
     return None
+
+def generate_image(prompt: str) -> Optional[str]:
+    """Генерация изображения через DALL-E или аналогичный API."""
+    if not AI_API_KEY:
+        return None
+    
+    try:
+        headers = {
+            "Authorization": f"Bearer {AI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "dall-e-3",
+            "prompt": f"Create an image for: {prompt}",
+            "n": 1,
+            "size": "1024x1024",
+        }
+        resp = requests.post(
+            f"{AI_BASE_URL}/images/generations",
+            headers=headers,
+            json=payload,
+            timeout=120,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if "data" in data and len(data["data"]) > 0:
+                return data["data"][0].get("url")
+        else:
+            print(f"Image API error {resp.status_code}: {resp.text}")
+    except Exception as e:
+        print(f"Image generation error: {e}")
+    return None
+
+def check_image_request(text: str) -> bool:
+    """Проверяет, просит ли пользователь изображение."""
+    if not text:
+        return False
+    text_lower = text.lower()
+    image_keywords = [
+        "нарисуй", "картинку", "изображение", "сгенерируй", "рисуй", "покажи",
+        "draw", "image", "picture", "create", "generate", "show me"
+    ]
+    return any(keyword in text_lower for keyword in image_keywords)
 
 def get_system_prompt(agent_type: str, description: str) -> str:
     """Получить системный промпт для агента."""
@@ -294,13 +320,6 @@ class AgentUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
-    tg_token: Optional[str] = None
-    tg_chat_id: Optional[str] = None
-    tg_bot_token: Optional[str] = None  # Bot API токен от @BotFather
-    tg_phone: Optional[str] = None  # Номер телефона для MTProto
-    tg_code: Optional[str] = None   # Код из SMS для входа
-    vk_token: Optional[str] = None
-    vk_group_id: Optional[str] = None
 
 class SocialPost(BaseModel):
     agent_id: int
@@ -315,11 +334,6 @@ class TaskCreate(BaseModel):
     agent_id: Optional[int] = None  # по умолчанию CEO распределит задачу
     user_id: int
 
-    # Контакты/цели для агентов соцсетей (опционально)
-    tg_target: Optional[str] = None  # username / phone / chat_id
-    vk_target_user_id: Optional[int] = None  # получатель в VK (user_id)
-    vk_post_group: Optional[bool] = None  # если True — публикуем пост на стену группы
-
 class TaskExecute(BaseModel):
     user_id: int
 
@@ -328,6 +342,7 @@ class MessageCreate(BaseModel):
     user_id: int
     text: str
     sender: str
+    image: Optional[str] = None
 
 # === ROUTES ===
 @app.get("/")
@@ -387,8 +402,8 @@ async def get_agents(user_id: int):
     if not user_agents:
         default_agents = [
             {"id": now_ms(), "user_id": user_id, "name": "Ген Директор", "agent_type": "ceo", "is_active": True, "description": "Главный агент, управляет командой"},
-            {"id": now_ms() + 1, "user_id": user_id, "name": "VK Support", "agent_type": "vk_bot", "is_active": True, "description": "Бот для ВКонтакте"},
-            {"id": now_ms() + 2, "user_id": user_id, "name": "TG Sales", "agent_type": "tg_bot", "is_active": True, "description": "Telegram бот для продаж"},
+            {"id": now_ms() + 1, "user_id": user_id, "name": "Программист", "agent_type": "coder", "is_active": True, "description": "Пишет код на Python, JavaScript, SQL"},
+            {"id": now_ms() + 2, "user_id": user_id, "name": "Исследователь", "agent_type": "researcher", "is_active": True, "description": "Ищет и анализирует информацию"},
         ]
         agents.extend(default_agents)
         save_json(AGENTS_FILE, agents)
@@ -459,6 +474,13 @@ async def send_message(msg: MessageCreate):
     messages = load_json(MESSAGES_FILE, [])
     context = [m for m in messages if m["agent_id"] == msg.agent_id and m["user_id"] == msg.user_id][-20:]
 
+    # Проверяем, просит ли пользователь изображение
+    image_url = None
+    if AI_API_KEY and check_image_request(msg.text):
+        image_url = generate_image(msg.text)
+        if image_url:
+            print(f"✅ Image generated for user {msg.user_id}")
+
     ai_response = generate_ai_response(
         agent.get("agent_type", "custom"),
         msg.text,
@@ -473,6 +495,7 @@ async def send_message(msg: MessageCreate):
         "text": msg.text,
         "sender": "user",
         "timestamp": datetime.now().isoformat(),
+        "image": None,
     }
     ai_msg = {
         "id": now_ms() + 1,
@@ -481,11 +504,12 @@ async def send_message(msg: MessageCreate):
         "text": ai_response,
         "sender": "agent",
         "timestamp": datetime.now().isoformat(),
+        "image": image_url,
     }
     messages.extend([user_msg, ai_msg])
     save_json(MESSAGES_FILE, messages)
 
-    return {"message": "Сообщения отправлены", "response": ai_response}
+    return {"message": "Сообщения отправлены", "response": ai_response, "image": image_url}
 
 @app.get("/api/v1/messages/{agent_id}/{user_id}")
 async def get_messages(agent_id: int, user_id: int):
@@ -529,9 +553,6 @@ async def create_task(task: TaskCreate):
         "title": task.title,
         "description": task.description,
         "agent_id": task.agent_id,
-        "tg_target": task.tg_target,
-        "vk_target_user_id": task.vk_target_user_id,
-        "vk_post_group": task.vk_post_group,
         "status": "pending",
         "result": None,
         "process_line": "",
@@ -602,22 +623,16 @@ async def execute_task_v2(task_id: int, body: TaskExecute):
     _append_task_log(task, "CEO: задача принята")
     save_json(TASKS_FILE, tasks)
 
-    tg_target = task.get("tg_target")
-    vk_target_user_id = task.get("vk_target_user_id")
-    vk_post_group = task.get("vk_post_group")
-
     plan_prompt = (
         "Ты — Генеральный директор ИИ-компании.\n"
-        "Разбей задачу пользователя на подзадачи по ролям агентов: vk_bot, tg_bot, coder, researcher, analyst, poster.\n"
+        "Разбей задачу пользователя на подзадачи по ролям агентов: coder, researcher, analyst, poster.\n"
         "Верни ТОЛЬКО JSON в формате:\n"
         "{\n"
         '  "steps": [\n'
-        '    {"agent_type": "vk_bot|tg_bot|coder|researcher|analyst|poster", "action": "...", "should_social": false, "should_post": false}\n'
+        '    {"agent_type": "coder|researcher|analyst|poster", "action": "..."}\n'
         '  ],\n'
         '  "final_action": "..."\n'
         "}\n\n"
-        "Где should_social=true если агент должен общаться/делать заказы в соцсетях.\n"
-        "Где should_post=true если агент должен опубликовать пост.\n"
         f"Задача: {task['title']}\n{task['description']}"
     )
 
@@ -637,15 +652,13 @@ async def execute_task_v2(task_id: int, body: TaskExecute):
         parsed = _json.loads(raw)
         steps = parsed.get("steps", [])
     except Exception:
-        steps = [{"agent_type": "coder", "action": "выполни задачу", "should_social": False, "should_post": False}]
+        steps = [{"agent_type": "coder", "action": "выполни задачу"}]
 
     result_parts = []
 
     for idx, st in enumerate(steps, start=1):
         agent_type = st.get("agent_type")
         action = st.get("action", "")
-        should_social = bool(st.get("should_social"))
-        should_post = bool(st.get("should_post"))
 
         step_agent = next(
             (a for a in agents if a.get("user_id") == body.user_id and a.get("agent_type") == agent_type and a.get("is_active")),
@@ -669,38 +682,6 @@ async def execute_task_v2(task_id: int, body: TaskExecute):
             step_agent.get("description", ""),
             context=None,
         )
-
-        if should_social:
-            if agent_type == "tg_bot":
-                if not tg_target:
-                    _append_task_log(task, f"Шаг {idx} TG: tg_target не задан")
-                else:
-                    if not step_agent.get("tg_logged_in"):
-                        _append_task_log(task, f"Шаг {idx} TG: агент не залогинен")
-                    else:
-                        # Восстановить клиент из сессии, если сервер перезапускался
-                        if step_agent["id"] not in active_clients:
-                            phone = step_agent.get("tg_phone", "")
-                            if phone:
-                                await get_or_create_client(step_agent["id"], body.user_id, phone)
-                        send_res = await send_telegram_message(step_agent["id"], tg_target, step_text)
-                        _append_task_log(task, f"Шаг {idx} TG: отправка ok={send_res.get('ok')}")
-
-            elif agent_type == "vk_bot":
-                if not vk_target_user_id:
-                    _append_task_log(task, f"Шаг {idx} VK: vk_target_user_id не задан")
-                else:
-                    vk_token = step_agent.get("vk_token", "")
-                    send_res = vk_send_message(vk_token, int(vk_target_user_id), step_text)
-                    _append_task_log(task, f"Шаг {idx} VK: отправка ok={send_res.get('ok')}")
-
-        if should_post and vk_post_group:
-            vk_agent = next((a for a in agents if a.get("user_id") == body.user_id and a.get("agent_type") == "vk_bot"), None)
-            if vk_agent and vk_agent.get("vk_token") and vk_agent.get("vk_group_id"):
-                pub_res = vk_post_to_wall(vk_agent["vk_token"], str(vk_agent["vk_group_id"]), step_text)
-                _append_task_log(task, f"Шаг {idx} VK POST: ok={pub_res.get('ok')}")
-            else:
-                _append_task_log(task, f"Шаг {idx} VK POST: нет vk_token/vk_group_id")
 
         result_parts.append(f"[{agent_type}]\n{step_text}")
         save_json(TASKS_FILE, tasks)
@@ -756,316 +737,6 @@ async def track_visit():
     visits.append({"date": datetime.now().isoformat(), "timestamp": datetime.now().timestamp()})
     save_json(VISITS_FILE, visits)
     return {"message": "Посещение записано"}
-
-# --- SOCIAL MEDIA INTEGRATION ---
-def tg_send_message(bot_token: str, chat_id: str, text: str) -> dict:
-    """Отправить сообщение в Telegram"""
-    if not bot_token or not chat_id:
-        return {"ok": False, "error": "TG token или chat_id не настроен"}
-    try:
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        resp = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=15)
-        data = resp.json()
-        if data.get("ok"):
-            return {"ok": True, "message_id": data["result"].get("message_id")}
-        return {"ok": False, "error": data.get("description", "Unknown error")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-def vk_post_to_wall(token: str, group_id: str, text: str) -> dict:
-    """Опубликовать пост на стену VK группы"""
-    if not token or not group_id:
-        return {"ok": False, "error": "VK token или group_id не настроен"}
-    try:
-        url = "https://api.vk.com/method/wall.post"
-        params = {
-            "access_token": token,
-            "v": "5.199",
-            "owner_id": f"-{group_id}",
-            "message": text,
-            "from_group": 1
-        }
-        resp = requests.post(url, params=params, timeout=15)
-        data = resp.json()
-        if "response" in data:
-            return {"ok": True, "post_id": data["response"].get("post_id")}
-        return {"ok": False, "error": data.get("error", {}).get("error_msg", "Unknown error")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-def vk_send_message(token: str, user_id: int, text: str) -> dict:
-    """Отправить сообщение пользователю VK"""
-    if not token:
-        return {"ok": False, "error": "VK token не настроен"}
-    try:
-        url = "https://api.vk.com/method/messages.send"
-        params = {
-            "access_token": token,
-            "v": "5.199",
-            "user_id": user_id,
-            "message": text,
-            "random_id": now_ms()
-        }
-        resp = requests.post(url, params=params, timeout=15)
-        data = resp.json()
-        if "response" in data:
-            return {"ok": True, "message_id": data["response"]}
-        return {"ok": False, "error": data.get("error", {}).get("error_msg", "Unknown error")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-# === TELEGRAM BOT API (простой способ, не нужны API_ID/API_HASH) ===
-def tg_bot_send_message(bot_token: str, chat_id: str, text: str, parse_mode: str = "HTML") -> dict:
-    """Отправить сообщение через Telegram Bot API (HTTP). Не требует API_ID/API_HASH."""
-    if not bot_token or not chat_id:
-        return {"ok": False, "error": "Bot token или chat_id не задан"}
-    try:
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
-        resp = requests.post(url, json=payload, timeout=15)
-        data = resp.json()
-        if data.get("ok"):
-            return {"ok": True, "message_id": data["result"].get("message_id")}
-        return {"ok": False, "error": data.get("description", "Unknown error")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-async def tg_bot_get_me(bot_token: str) -> dict:
-    """Проверить валидность токена бота"""
-    if not bot_token:
-        return {"ok": False, "error": "Токен не задан"}
-    try:
-        url = f"https://api.telegram.org/bot{bot_token}/getMe"
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-        if data.get("ok"):
-            return {"ok": True, "bot_username": data["result"].get("username")}
-        return {"ok": False, "error": data.get("description", "Invalid token")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-# === TELEGRAM MTProto CLIENT ENDPOINTS ===
-@app.post("/api/v1/agents/{agent_id}/tg/bot/send")
-async def tg_bot_api_send(agent_id: int, user_id: int, chat_id: str, text: str):
-    """Отправить сообщение через Telegram Bot API (токен от @BotFather)"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-    
-    bot_token = agent.get("tg_bot_token", "")
-    if not bot_token:
-        raise HTTPException(status_code=400, detail="Bot token не настроен. Получите его у @BotFather")
-
-    target = chat_id or agent.get("tg_chat_id", "")
-    if not target:
-        raise HTTPException(status_code=400, detail="Chat ID не задан")
-
-    result = tg_bot_send_message(bot_token, target, text)
-    if result["ok"]:
-        return {"message": "✅ Сообщение отправлено через бота", "result": result}
-    raise HTTPException(status_code=400, detail=result["error"])
-
-
-@app.get("/api/v1/agents/{agent_id}/tg/bot/status")
-async def tg_bot_api_status(agent_id: int, user_id: int):
-    """Проверить статус Bot API токена"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-    
-    bot_token = agent.get("tg_bot_token", "")
-    if not bot_token:
-        return {"ok": False, "connected": False, "mode": "bot", "error": "Токен не задан"}
-
-    result = await tg_bot_get_me(bot_token)
-    return {
-        "ok": result["ok"],
-        "connected": result["ok"],
-        "mode": "bot",
-        "bot_username": result.get("bot_username"),
-        "error": result.get("error"),
-    }
-
-
-@app.post("/api/v1/agents/{agent_id}/tg/login")
-async def tg_mtproto_login(agent_id: int, user_id: int):
-    """Инициировать вход в Telegram (MTProto) по номеру телефона"""
-    try:
-        agents = load_json(AGENTS_FILE, [])
-        agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Агент не найден")
-
-        phone = agent.get("tg_phone")
-        if not phone:
-            raise HTTPException(status_code=400, detail="Номер телефона не настроен")
-
-        client = await get_or_create_client(agent_id, user_id, phone)
-        result = await client.login()
-        return result
-    except Exception as e:
-        print(f"tg_mtproto_login error: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail=f"tg_mtproto_login failed: {type(e).__name__}: {e}")
-
-
-@app.post("/api/v1/agents/{agent_id}/tg/verify")
-async def tg_mtproto_verify(agent_id: int, user_id: int, code: str):
-    """Подтвердить вход кодом из SMS"""
-    if agent_id not in active_clients:
-        raise HTTPException(status_code=400, detail="Сессия не найдена")
-    
-    client = active_clients[agent_id]
-    result = await client.login_with_code(code)
-    if result["status"] == "success":
-        agents = load_json(AGENTS_FILE, [])
-        agent = next((a for a in agents if a["id"] == agent_id), None)
-        if agent:
-            agent["tg_logged_in"] = True
-            save_json(AGENTS_FILE, agents)
-    return result
-
-@app.get("/api/v1/agents/{agent_id}/tg/status")
-async def tg_mtproto_status(agent_id: int, user_id: int):
-    """Проверить статус MTProto сессии"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-    
-    is_logged = agent.get("tg_logged_in", False)
-    phone = agent.get("tg_phone", "")
-    
-    return {
-        "agent_id": agent_id,
-        "phone": phone[:3] + "..." + phone[-2:] if phone else None,
-        "logged_in": is_logged,
-        "can_send_messages": is_logged,
-        "mode": "user" if is_logged else "not_connected"
-    }
-
-@app.post("/api/v1/agents/{agent_id}/tg/send")
-async def tg_mtproto_send(agent_id: int, user_id: int, target: str, text: str):
-    """Отправить сообщение через Telegram MTProto (как человек)"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-    
-    if not agent.get("tg_logged_in"):
-        raise HTTPException(status_code=400, detail="Не авторизован в Telegram. Сначала выполните вход.")
-    
-    # Восстановить клиент из сессии, если сервер перезапускался
-    if agent_id not in active_clients:
-        phone = agent.get("tg_phone", "")
-        if phone:
-            await get_or_create_client(agent_id, user_id, phone)
-    
-    result = await send_telegram_message(agent_id, target, text)
-    if result["ok"]:
-        return {"message": "✅ Сообщение отправлено через Telegram аккаунт", "result": result}
-    raise HTTPException(status_code=400, detail=result["error"])
-
-@app.post("/api/v1/agents/{agent_id}/tg/channel")
-async def tg_mtproto_channel(agent_id: int, user_id: int, channel: str, text: str):
-    """Опубликовать пост в канал через Telegram MTProto"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-    
-    if not agent.get("tg_logged_in"):
-        raise HTTPException(status_code=400, detail="Не авторизован в Telegram")
-    
-    # Восстановить клиент из сессии, если сервер перезапускался
-    if agent_id not in active_clients:
-        phone = agent.get("tg_phone", "")
-        if phone:
-            await get_or_create_client(agent_id, user_id, phone)
-    
-    result = await send_to_telegram_channel(agent_id, channel, text)
-    if result["ok"]:
-        return {"message": "✅ Пост опубликован в канал", "result": result}
-    raise HTTPException(status_code=400, detail=result["error"])
-
-@app.post("/api/v1/agents/{agent_id}/social")
-async def update_agent_social(agent_id: int, user_id: int, update: AgentUpdate):
-    """Обновить социальные токены агента"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-
-    if update.tg_token is not None:
-        agent["tg_token"] = update.tg_token
-    if update.tg_chat_id is not None:
-        agent["tg_chat_id"] = update.tg_chat_id
-    if update.tg_bot_token is not None:
-        agent["tg_bot_token"] = update.tg_bot_token
-    if update.tg_phone is not None:
-        agent["tg_phone"] = update.tg_phone
-    if update.vk_token is not None:
-        agent["vk_token"] = update.vk_token
-    if update.vk_group_id is not None:
-        agent["vk_group_id"] = update.vk_group_id
-
-    save_json(AGENTS_FILE, agents)
-    return {"message": "Настройки соцсетей обновлены", "agent": agent}
-
-@app.post("/api/v1/social/send")
-async def social_send(post: SocialPost):
-    """Отправить сообщение/пост через агента"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == post.agent_id and a.get("user_id") == post.user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-
-    if post.platform == "tg":
-        token = agent.get("tg_token", "")
-        chat_id = post.chat_id or agent.get("tg_chat_id", "")
-        result = tg_send_message(token, chat_id, post.text)
-        if result["ok"]:
-            return {"message": "✅ Сообщение отправлено в Telegram", "result": result}
-        raise HTTPException(status_code=400, detail=result["error"])
-
-    elif post.platform == "vk":
-        token = agent.get("vk_token", "")
-        group_id = agent.get("vk_group_id", "")
-        result = vk_post_to_wall(token, group_id, post.text)
-        if result["ok"]:
-            return {"message": "✅ Пост опубликован в VK", "result": result}
-        raise HTTPException(status_code=400, detail=result["error"])
-
-    else:
-        raise HTTPException(status_code=400, detail="Неизвестная платформа. Используйте 'tg' или 'vk'")
-
-@app.get("/api/v1/social/status/{agent_id}/{user_id}")
-async def social_status(agent_id: int, user_id: int):
-    """Проверить статус подключения соцсетей агента"""
-    agents = load_json(AGENTS_FILE, [])
-    agent = next((a for a in agents if a["id"] == agent_id and a.get("user_id") == user_id), None)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-
-    return {
-        "agent_id": agent_id,
-        "agent_type": agent.get("agent_type"),
-        "telegram": {
-            "connected": bool(agent.get("tg_token") or agent.get("tg_bot_token")),
-            "token_set": bool(agent.get("tg_token")),
-            "bot_token_set": bool(agent.get("tg_bot_token")),
-            "chat_id_set": bool(agent.get("tg_chat_id")),
-            "mtproto_logged_in": bool(agent.get("tg_logged_in")),
-        },
-        "vk": {
-            "connected": bool(agent.get("vk_token")),
-            "token_set": bool(agent.get("vk_token")),
-            "group_id_set": bool(agent.get("vk_group_id"))
-        }
-    }
 
 # --- AI STATUS ---
 @app.get("/api/v1/ai/status")
