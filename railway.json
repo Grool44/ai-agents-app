@@ -2,8 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildEnvironment": "V3",
-    "buildCommand": "pip install -r requirements.txt"
+    "buildEnvironment": "V3"
   },
   "deploy": {
     "runtime": "V2",
