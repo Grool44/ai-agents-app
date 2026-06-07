@@ -752,6 +752,23 @@ async def ai_status():
 FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Раздача frontend файлов
+FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+
+@app.get("/")
+async def serve_frontend():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+@app.get("/dashboard.html")
+async def serve_dashboard():
+    return FileResponse(os.path.join(FRONTEND_DIR, "dashboard.html"))
+
+# Mount static files for CSS, JS, etc.
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
