@@ -1,0 +1,11 @@
+{
+  "name": "ai-agents-app",
+  "settings": {
+    "python": {
+      "version": "3.11"
+    }
+  },
+  "build": {
+    "builder": "python"
+  }
+}
