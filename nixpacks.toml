@@ -1,12 +1,11 @@
 [variables]
 NIXPACKS_PYTHON_VERSION = "3.11"
-NIXPACKS_INJECT_DEPS = "python311"
 
 [phases.setup]
-nixPkgs = ["python311"]
+nixPkgs = ["python311Full"]
 
 [phases.install]
-cmds = ["python -m pip install --no-cache-dir -r requirements.txt"]
+cmds = ["python -m ensurepip --upgrade", "python -m pip install --no-cache-dir -r requirements.txt"]
 
 [phases.build]
 cmds = []
