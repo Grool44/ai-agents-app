@@ -7,7 +7,11 @@ import sys
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
-from main import app
+try:
+    from main import app
+except ImportError as e:
+    print(f"Error importing app: {e}")
+    raise
 
 if __name__ == "__main__":
     import uvicorn
