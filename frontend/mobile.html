@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AI Office Mobile</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0e1a;color:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{padding:16px;text-align:center;background:rgba(15,23,42,0.95);border-bottom:1px solid #1e3a5f;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:18px}
+.btn-logout{background:#ef4444;border:none;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.agent-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:16px;overflow-y:auto}
+.agent-card{background:#1e3a5f;border:1px solid #3b82f6;border-radius:12px;padding:16px;text-align:center;cursor:pointer;transition:transform .2s}
+.agent-card:active{transform:scale(0.95)}
+.agent-icon{font-size:32px;margin-bottom:8px}
+.agent-name{font-size:13px;font-weight:600;margin-bottom:4px}
+.agent-role{font-size:11px;color:#94a3b8}
+.chat-overlay{position:fixed;inset:0;background:#0a0e1a;z-index:100;display:none;flex-direction:column}
+.chat-overlay.active{display:flex}
+.chat-header{padding:16px;background:#1e3a5f;display:flex;align-items:center;gap:12px;border-bottom:1px solid #3b82f6}
+.back-btn{background:none;border:none;color:#fff;font-size:24px;cursor:pointer}
+.chat-header-title{font-size:16px;font-weight:600}
+.chat-messages{flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.message{max-width:80%;padding:12px;border-radius:12px;font-size:14px;line-height:1.5}
+.message.user{align-self:flex-end;background:#3b82f6}
+.message.agent{align-self:flex-start;background:#1e3a5f}
+.chat-input{padding:12px;background:#1e3a5f;display:flex;gap:8px}
+.chat-input input{flex:1;background:rgba(0,0,0,0.3);border:1px solid #3b82f6;border-radius:20px;padding:10px 16px;color:#fff;font-size:14px;outline:none}
+.chat-input button{background:#10b981;border:none;color:#fff;padding:10px 20px;border-radius:20px;font-size:14px}
+.tasks-bar{background:#1e3a5f;padding:12px;border-top:1px solid #3b82f6}
+.tasks-bar h3{font-size:12px;color:#94a3b8;margin-bottom:8px}
+.task-list{display:flex;gap:8px;overflow-x:auto}
+.task-item{min-width:120px;background:rgba(0,0,0,0.3);border:1px solid #3b82f6;border-radius:8px;padding:8px;font-size:11px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:flex;align-items:center;justify-content:center}
+.modal.active{display:flex}
+.modal-content{background:#0f172a;border:1px solid #1e3a5f;border-radius:16px;padding:24px;width:90%;max-width:400px}
+.modal-content h2{font-size:16px;margin-bottom:16px}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:11px;color:#94a3b8;margin-bottom:6px}
+.form-group input,.form-group select{width:100%;background:rgba(0,0,0,0.3);border:1px solid #1e3a5f;border-radius:8px;padding:10px;color:#fff;font-size:14px;outline:none}
+.modal-actions{display:flex;gap:8px;margin-top:16px}
+.modal-actions button{flex:1;padding:10px;border-radius:8px;border:none;font-size:13px}
+.btn-success{background:#10b981;color:#fff}
+.btn-secondary{background:#334155;color:#fff}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 20px;border-radius:8px;border:1px solid #1e3a5f;font-size:12px;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+<h1>🏢 AI Office</h1>
+<div style="display:flex;gap:8px;align-items:center">
+<a href="/dashboard.html" style="background:#3b82f6;border:none;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;text-decoration:none">💻 Desktop</a>
+<button class="btn-logout" onclick="logout()">Выход</button>
+</div>
+</header>
+
+<div class="main">
+<div class="agent-grid" id="agentGrid"></div>
+</div>
+
+<div class="tasks-bar">
+<h3>📋 Задачи</h3>
+<div class="task-list" id="taskList"></div>
+</div>
+
+<div class="chat-overlay" id="chatOverlay">
+<div class="chat-header">
+<button class="back-btn" onclick="closeChat()">←</button>
+<div>
+<div class="chat-header-title" id="chatTitle"></div>
+<div style="font-size:11px;color:#94a3b8" id="chatRole"></div>
+</div>
+</div>
+<div class="chat-messages" id="chatMessages"></div>
+<div class="chat-input">
+<input type="text" id="messageInput" placeholder="Сообщение..." onkeypress="if(event.key==='Enter')sendMessage()">
+<button onclick="sendMessage()">➤</button>
+</div>
+</div>
+
+<div class="modal" id="createModal">
+<div class="modal-content">
+<h2>Нанять агента</h2>
+<form id="createForm">
+<div class="form-group">
+<label>Имя</label>
+<input type="text" id="agentName" required>
+</div>
+<div class="form-group">
+<label>Роль</label>
+<select id="agentType">
+<option value="ceo">👔 Директор</option>
+<option value="coder">💻 Программист</option>
+<option value="researcher">🔍 Исследователь</option>
+<option value="analyst">📊 Аналитик</option>
+</select>
+</div>
+<div class="form-group">
+<label>Описание</label>
+<input type="text" id="agentDesc">
+</div>
+<div class="modal-actions">
+<button type="button" class="btn-secondary" onclick="closeModal()">Отмена</button>
+<button type="submit" class="btn-success">Нанять</button>
+</div>
+</form>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<button onclick="openCreateModal()" style="position:fixed;bottom:80px;right:16px;background:#3b82f6;border:none;color:#fff;width:56px;height:56px;border-radius:50%;font-size:24px;box-shadow:0 4px 12px rgba(0,0,0,0.3)">+</button>
+
+<script>
+// API_BASE можно изменить на ваш сервер
+const API_BASE = typeof window.API_URL !== 'undefined' ? window.API_URL : 'http://localhost:8000/api/v1';
+let currentUser=null,agents=[],tasks=[],selectedAgent=null;
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
+function getUser(){try{const u=localStorage.getItem('currentUser');return u?JSON.parse(u):null}catch(e){return null}}
+function logout(){localStorage.removeItem('currentUser');window.location.href='/mobile.html'}
+
+async function loadAgents(){try{const r=await fetch(API_BASE+'/agents/'+currentUser.id);agents=await r.json();renderAgents()}catch(e){agents=[]}}
+async function loadTasks(){try{const r=await fetch(API_BASE+'/tasks/'+currentUser.id);tasks=await r.json();renderTasks()}catch(e){tasks=[]}}
+
+function renderAgents(){const g=document.getElementById('agentGrid');g.innerHTML='';agents.forEach(a=>{const r={ceo:'Директор',coder:'Программист',researcher:'Исследователь',analyst:'Аналитик'}[a.agent_type]||'Агент';const i={ceo:'👔',coder:'💻',researcher:'🔍',analyst:'📊'}[a.agent_type]||'🤖';const c=document.createElement('div');c.className='agent-card';c.innerHTML=`<div class="agent-icon">${i}</div><div class="agent-name">${a.name}</div><div class="agent-role">${r}</div>`;c.onclick=()=>openChat(a);g.appendChild(c)});if(!agents.length)g.innerHTML='<div style="color:#94a3b8;text-align:center">Нет агентов</div>'}
+
+function renderTasks(){const t=document.getElementById('taskList');t.innerHTML='';tasks.slice(-5).reverse().forEach(x=>{const a=agents.find(y=>y.id===x.agent_id);const i=document.createElement('div');i.className='task-item';i.innerHTML=`${x.status==='completed'?'✅':'⏳'} ${x.title}`;t.appendChild(i)});if(!tasks.length)t.innerHTML='<div style="color:#94a3b8">Нет задач</div>'}
+
+function openChat(a){selectedAgent=a;document.getElementById('chatTitle').textContent=a.name;document.getElementById('chatRole').textContent={ceo:'Директор',coder:'Программист',researcher:'Исследователь',analyst:'Аналитik'}[a.agent_type]||'Агент';document.getElementById('chatOverlay').classList.add('active');loadMessages(a.id)}
+function closeChat(){document.getElementById('chatOverlay').classList.remove('active');selectedAgent=null}
+
+async function loadMessages(id){try{const r=await fetch(API_BASE+'/messages/'+id+'/'+currentUser.id);const m=await r.json();renderMessages(m)}catch(e){document.getElementById('chatMessages').innerHTML='<div style="color:#94a3b8;text-align:center">Начните диалог</div>'}}
+function renderMessages(ms){const c=document.getElementById('chatMessages');if(!ms||!ms.length){c.innerHTML='<div style="color:#94a3b8;text-align:center">Начните диалог</div>';return}let h='';ms.forEach(m=>{const t=new Date(m.timestamp).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});h+=`<div class="message ${m.sender}">${m.text}<div style="font-size:10px;opacity:.6;margin-top:4px">${t}</div></div>`});c.innerHTML=h;c.scrollTop=c.scrollHeight}
+
+async function sendMessage(){const t=document.getElementById('messageInput').value.trim();if(!t||!selectedAgent)return;const c=document.getElementById('chatMessages');const time=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});c.innerHTML+=`<div class="message user">${t}<div style="font-size:10px;opacity:.6;margin-top:4px">${time}</div></div>`;c.scrollTop=c.scrollHeight;document.getElementById('messageInput').value='';try{const r=await fetch(API_BASE+'/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_id:selectedAgent.id,user_id:currentUser.id,text:t,sender:'user'})});const d=await r.json();if(d.response)await loadMessages(selectedAgent.id)}catch(e){showToast('Ошибка')}
+}
+
+function openCreateModal(){document.getElementById('createModal').classList.add('active')}
+function closeModal(){document.getElementById('createModal').classList.remove('active');document.getElementById('createForm').reset()}
+
+document.getElementById('createForm').addEventListener('submit',async e=>{e.preventDefault();try{const r=await fetch(API_BASE+'/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('agentName').value,agent_type:document.getElementById('agentType').value,description:document.getElementById('agentDesc').value,user_id:currentUser.id})});if(r.ok){showToast('Агент нанят!');closeModal();await loadAgents()}}catch(e){showToast('Ошибка')}});
+
+async function init(){currentUser=getUser();if(!currentUser||!currentUser.id){window.location.href='/login.html';return}await loadAgents();await loadTasks()}
+init();
+</script>
+</body>
+</html>
